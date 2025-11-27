@@ -16,19 +16,25 @@ def send_telegram(msg):
 
 def get_btc_price():
     ticker = yf.Ticker("BTC-USD")
-    data_1m = ticker.history(period="1d", interval="1m")
-    data_1d = ticker.history(period="2d", interval="1d")
-    if data_1m.empty or data_1d.empty:
+    # ข้อมูล 1 วันย้อนหลัง ทุก 1 นาที สำหรับ High/Low 24h
+    data_1d_1m = ticker.history(period="1d", interval="1m")
+    # ข้อมูล 2 วันย้อนหลัง ทุก 1 วัน สำหรับ 24h change
+    data_2d_daily = ticker.history(period="2d", interval="1d")
+    if data_1d_1m.empty or data_2d_daily.empty:
         return None, None, None, None, None, None
-    price = data_1m["Close"].iloc[-1]
-    day_high = data_1m["High"].iloc[-1]
-    day_low = data_1m["Low"].iloc[-1]
+    
+    price = data_1d_1m["Close"].iloc[-1]
+
+    # High / Low 24 ชั่วโมง
+    day_high = data_1d_1m["High"].max()
+    day_low = data_1d_1m["Low"].min()
 
     # การเปลี่ยนแปลง 24 ชั่วโมง
-    prev_24h = data_1d["Close"].iloc[0]
+    prev_24h = data_2d_daily["Close"].iloc[0]
     change_val_24h = price - prev_24h
     pct_change_24h = (change_val_24h / prev_24h) * 100
-    return price, day_high, day_low, change_val_24h, pct_change_24h, data_1m
+
+    return price, day_high, day_low, change_val_24h, pct_change_24h, data_1d_1m
 
 def get_highlow_3m():
     ticker = yf.Ticker("BTC-USD")
@@ -63,8 +69,8 @@ def main():
     else:
         msg += "\n"
 
-    msg += f"📈 High: {day_high:,.2f}\n"
-    msg += f"📉 Low: {day_low:,.2f}\n"
+    msg += f"📈 High (24h): {day_high:,.2f}\n"
+    msg += f"📉 Low (24h): {day_low:,.2f}\n"
     msg += f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}\n"
 
     send_telegram(msg)
@@ -75,8 +81,8 @@ def main():
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
             f"ราคาผันผวนเกิน {VOL_THRESHOLD}% ใน 24 ชั่วโมง\n"
             f"ราคา: {price:,.2f} ({pct_change_24h:+.2f}%)\n\n"
-            f"📈 High: {day_high:,.2f}\n"
-            f"📉 Low: {day_low:,.2f}\n"
+            f"📈 High (24h): {day_high:,.2f}\n"
+            f"📉 Low (24h): {day_low:,.2f}\n"
             f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
         )
         send_telegram(vol_msg)
