@@ -16,13 +16,19 @@ def send_telegram(msg):
 
 def get_btc_price():
     ticker = yf.Ticker("BTC-USD")
-    data = ticker.history(period="1d", interval="1m")
-    if data.empty:
-        return None, None, None, None
-    price = data["Close"].iloc[-1]
-    day_high = data["High"].iloc[-1]
-    day_low = data["Low"].iloc[-1]
-    return price, day_high, day_low, data
+    data_1m = ticker.history(period="1d", interval="1m")
+    data_1d = ticker.history(period="2d", interval="1d")
+    if data_1m.empty or data_1d.empty:
+        return None, None, None, None, None, None
+    price = data_1m["Close"].iloc[-1]
+    day_high = data_1m["High"].iloc[-1]
+    day_low = data_1m["Low"].iloc[-1]
+
+    # การเปลี่ยนแปลง 24 ชั่วโมง
+    prev_24h = data_1d["Close"].iloc[0]
+    change_val_24h = price - prev_24h
+    pct_change_24h = (change_val_24h / prev_24h) * 100
+    return price, day_high, day_low, change_val_24h, pct_change_24h, data_1m
 
 def get_highlow_3m():
     ticker = yf.Ticker("BTC-USD")
@@ -37,7 +43,7 @@ def get_usd_to_thb():
     return data["Close"].iloc[-1]
 
 def main():
-    price, day_high, day_low, data = get_btc_price()
+    price, day_high, day_low, change_val_24h, pct_change_24h, data = get_btc_price()
     if price is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ BTC")
         return
@@ -46,15 +52,11 @@ def main():
     usd_thb = get_usd_to_thb()
     btc_thb = price * usd_thb if usd_thb else None
 
-    # เปลี่ยนแปลง % จากแท่งก่อนหน้า
-    prev_close = data["Close"].iloc[-2] if len(data) >=2 else price
-    pct_change = (price - prev_close)/prev_close*100
-    change_val = price - prev_close
-
     # ข้อความหลัก
     msg = (
         f"🔔 *Bitcoin (BTC-USD)*\n\n"
-        f"💵 ราคา: *{price:,.2f}*  {change_val:+.2f} ({pct_change:+.2f}%)\n"
+        f"💵 ราคา: *{price:,.2f}*\n"
+        f"เปลี่ยน 24 hr. {change_val_24h:+,.2f} ({pct_change_24h:+.2f}%)\n"
     )
     if btc_thb:
         msg += f"({btc_thb:,.2f} บาท)\n\n"
@@ -68,11 +70,11 @@ def main():
     send_telegram(msg)
 
     # Volatility Alert
-    if abs(pct_change) >= VOL_THRESHOLD:
+    if abs(pct_change_24h) >= VOL_THRESHOLD:
         vol_msg = (
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
-            f"ราคาผันผวนเกิน {VOL_THRESHOLD}%\n"
-            f"ราคา: {price:,.2f} ({pct_change:+.2f}%)\n\n"
+            f"ราคาผันผวนเกิน {VOL_THRESHOLD}% ใน 24 ชั่วโมง\n"
+            f"ราคา: {price:,.2f} ({pct_change_24h:+.2f}%)\n\n"
             f"📈 High: {day_high:,.2f}\n"
             f"📉 Low: {day_low:,.2f}\n"
             f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
