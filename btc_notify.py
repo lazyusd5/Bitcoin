@@ -1,15 +1,13 @@
 import yfinance as yf
 import requests
 import os
-from datetime import datetime
-import pytz
 
 # Telegram token & Chat ID
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID_BTC")  # สำหรับห้อง Bitcoin
+CHAT_ID = os.getenv("CHAT_ID_BTC")  # ห้อง Bitcoin
 
 # Volatility Threshold
-VOL_THRESHOLD = 3  # % ราคาขยับ ≥ 3% แจ้งทันที
+VOL_THRESHOLD = 3  # % ราคาขยับ ≥3% แจ้งทันที
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -32,10 +30,9 @@ def get_highlow_3m():
     return data["High"].max(), data["Low"].min()
 
 def get_usd_to_thb():
-    url = "https://query1.finance.yahoo.com/v8/finance/chart/THB=X"
     try:
-        resp = requests.get(url).json()
-        rate = resp["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        resp = requests.get("https://api.exchangerate.host/latest?base=USD&symbols=THB").json()
+        rate = resp["rates"]["THB"]
         return rate
     except:
         return None
@@ -50,7 +47,7 @@ def main():
     rate_thb = get_usd_to_thb()
     price_thb = price * rate_thb if rate_thb else None
 
-    # คำนวณเปลี่ยนแปลง % จากแท่งก่อนหน้า
+    # เปลี่ยนแปลง % จากแท่งก่อนหน้า
     prev_close = data["Close"].iloc[-2] if len(data) >=2 else price
     pct_change = (price - prev_close)/prev_close*100
     change_val = price - prev_close
@@ -65,7 +62,8 @@ def main():
     else:
         msg += "\n"
 
-    msg += f"📈 High: {day_high:,.2f}    📉 Low: {day_low:,.2f}\n"
+    msg += f"📈 High: {day_high:,.2f}\n"
+    msg += f"📉 Low: {day_low:,.2f}\n"
     msg += f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}\n"
 
     send_telegram(msg)
@@ -76,7 +74,8 @@ def main():
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
             f"ราคาผันผวนเกิน {VOL_THRESHOLD}%\n"
             f"ราคา: {price:,.2f} ({pct_change:+.2f}%)\n\n"
-            f"📈 High: {day_high:,.2f}    📉 Low: {day_low:,.2f}\n"
+            f"📈 High: {day_high:,.2f}\n"
+            f"📉 Low: {day_low:,.2f}\n"
             f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
         )
         send_telegram(vol_msg)
