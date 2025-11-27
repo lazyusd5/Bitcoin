@@ -30,6 +30,7 @@ def get_highlow_3m():
     return data["High"].max(), data["Low"].min()
 
 def get_usd_to_thb():
+    # ใช้ exchangerate.host แทน Yahoo เพื่อความเสถียร
     try:
         resp = requests.get("https://api.exchangerate.host/latest?base=USD&symbols=THB").json()
         rate = resp["rates"]["THB"]
