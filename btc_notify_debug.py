@@ -6,7 +6,7 @@ import yfinance as yf
 # ------------------------- CONFIG -------------------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
-VOL_THRESHOLD = 3  # % ราคาผันผวนเกิน
+VOL_THRESHOLD = 1  # % ราคาผันผวนเกิน
 
 
 # ------------------------- FUNCTIONS -------------------------
