@@ -1,8 +1,8 @@
-name: BTC Daily Alerts
+name: BTC Alerts Every Minute
 
 on:
   schedule:
-    - cron: "22 5,10,15 * * *"  # เวลาไทย 12:22, 17:22, 22:22 (UTC)
+    - cron: "* * * * *"  # ทุก 1 นาที UTC
   workflow_dispatch:
 
 jobs:
