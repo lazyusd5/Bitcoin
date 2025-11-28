@@ -2,20 +2,23 @@ import yfinance as yf
 import os
 import requests
 from datetime import datetime
+import pytz  # เพิ่มเพื่อ timezone-aware
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
 
 VOL_THRESHOLD = 3  # % ราคาขยับ ≥3% แจ้งทันที
-
-# เพิ่มบรรทัดนี้
 FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
+
+# ตั้ง timezone ไทย
+THAI_TZ = pytz.timezone("Asia/Bangkok")
 
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
     requests.post(url, data=data)
+
 
 def get_btc_price():
     ticker = yf.Ticker("BTC-USD")
@@ -34,10 +37,12 @@ def get_btc_price():
 
     return price, day_high, day_low, change_val_24h, pct_change_24h, data_1d_1m
 
+
 def get_highlow_3m():
     ticker = yf.Ticker("BTC-USD")
     data = ticker.history(period="3mo")
     return data["High"].max(), data["Low"].min()
+
 
 def get_usd_to_thb():
     ticker = yf.Ticker("THB=X")
@@ -46,19 +51,17 @@ def get_usd_to_thb():
         return None
     return data["Close"].iloc[-1]
 
+
 def main():
     # ----------------------
-    # เช็คเวลาปัจจุบัน XX:22
+    # เช็คเวลาปัจจุบัน ไทยเวลา xx:22
     # ----------------------
-    now = datetime.now()
+    now = datetime.now(THAI_TZ)
 
-    # ⭐ เพิ่มเงื่อนไข FORCE_RUN ตรงนี้ ⭐
     if not FORCE_RUN:
         if now.minute != 22:
             return  # ไม่ใช่เวลา 22 นาที — ไม่ส่งข้อความ
-    # ถ้า FORCE_RUN = true จะข้ามส่วนเช็คเวลา และส่งทันที
 
-    # ถ้าถึงเวลา หรือรันเองพร้อม FORCE_RUN → ทำงานต่อ
     price, day_high, day_low, change_val_24h, pct_change_24h, data = get_btc_price()
     if price is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ BTC")
@@ -94,6 +97,7 @@ def main():
             f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
         )
         send_telegram(vol_msg)
+
 
 if __name__ == "__main__":
     main()
