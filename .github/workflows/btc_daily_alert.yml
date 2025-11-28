@@ -1,4 +1,4 @@
-name: BTC Alerts Every Minute
+name: BTC Alerts Every Minute (Light Version)
 
 on:
   schedule:
@@ -20,9 +20,16 @@ jobs:
         run: |
           pip install yfinance requests pytz
 
-      - name: Run BTC script
+      - name: Debug env
+        run: |
+          echo "TELEGRAM_TOKEN exists: $TELEGRAM_TOKEN"
+          echo "CHAT_ID_BTC exists: $CHAT_ID_BTC"
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID_BTC: ${{ secrets.CHAT_ID_BTC }}
-          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
-        run: python btc_notify.py
+
+      - name: Run BTC light script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID_BTC: ${{ secrets.CHAT_ID_BTC }}
+        run: python btc_notify_light.py
