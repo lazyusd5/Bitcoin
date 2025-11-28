@@ -2,7 +2,7 @@ import yfinance as yf
 import os
 import requests
 from datetime import datetime
-import pytz  # เพิ่มเพื่อ timezone-aware
+import pytz  # สำหรับ timezone-aware (ยังเก็บไว้ถ้าต้องการแสดงเวลา)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
@@ -10,7 +10,7 @@ CHAT_ID = os.getenv("CHAT_ID_BTC")
 VOL_THRESHOLD = 3  # % ราคาขยับ ≥3% แจ้งทันที
 FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
 
-# ตั้ง timezone ไทย
+# เวลาไทย (ถ้าต้องการแสดงในข้อความ)
 THAI_TZ = pytz.timezone("Asia/Bangkok")
 
 
@@ -53,15 +53,7 @@ def get_usd_to_thb():
 
 
 def main():
-    # ----------------------
-    # เช็คเวลาปัจจุบัน ไทยเวลา xx:22
-    # ----------------------
-    now = datetime.now(THAI_TZ)
-
-    if not FORCE_RUN:
-        if now.minute != 22:
-            return  # ไม่ใช่เวลา 22 นาที — ไม่ส่งข้อความ
-
+    # ลบเงื่อนไข minute ไม่ต้องเช็ค — ส่งทุกครั้งที่รัน
     price, day_high, day_low, change_val_24h, pct_change_24h, data = get_btc_price()
     if price is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ BTC")
@@ -71,8 +63,10 @@ def main():
     usd_thb = get_usd_to_thb()
     btc_thb = price * usd_thb if usd_thb else None
 
+    now = datetime.now(THAI_TZ)
     msg = (
-        f"🔔 *Bitcoin (BTC-USD)*\n\n"
+        f"🔔 *Bitcoin (BTC-USD)*\n"
+        f"🕒 เวลาไทย: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         f"💵 ราคา: *{price:,.2f}*\n"
         f"เปลี่ยน 24 hr. {change_val_24h:+,.2f} ({pct_change_24h:+.2f}%)\n"
     )
@@ -87,6 +81,7 @@ def main():
 
     send_telegram(msg)
 
+    # Volatility alert ตามเดิม
     if abs(pct_change_24h) >= VOL_THRESHOLD:
         vol_msg = (
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
