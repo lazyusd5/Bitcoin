@@ -8,6 +8,10 @@ CHAT_ID = os.getenv("CHAT_ID_BTC")
 
 VOL_THRESHOLD = 3  # % ราคาขยับ ≥3% แจ้งทันที
 
+# เพิ่มบรรทัดนี้
+FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
+
+
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
@@ -47,10 +51,14 @@ def main():
     # เช็คเวลาปัจจุบัน XX:22
     # ----------------------
     now = datetime.now()
-    if now.minute != 22:
-        return  # ไม่ใช่เวลา 22 นาที — ไม่ส่งข้อความ
-    
-    # ถ้าถึงเวลา XX:22 → ทำงานต่อ
+
+    # ⭐ เพิ่มเงื่อนไข FORCE_RUN ตรงนี้ ⭐
+    if not FORCE_RUN:
+        if now.minute != 22:
+            return  # ไม่ใช่เวลา 22 นาที — ไม่ส่งข้อความ
+    # ถ้า FORCE_RUN = true จะข้ามส่วนเช็คเวลา และส่งทันที
+
+    # ถ้าถึงเวลา หรือรันเองพร้อม FORCE_RUN → ทำงานต่อ
     price, day_high, day_low, change_val_24h, pct_change_24h, data = get_btc_price()
     if price is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ BTC")
