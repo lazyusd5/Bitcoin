@@ -2,7 +2,7 @@ name: BTC Telegram Alert
 
 on:
   schedule:
-    - cron: "*/1 * * * *"   # ทุก 1 นาที
+    - cron: "*/6 * * * *"   # ทุก 6 นาที
   workflow_dispatch:          # สามารถกด run เองได้
 
 jobs:
