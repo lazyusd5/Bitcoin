@@ -1,103 +1,123 @@
-import os
-import requests
 import yfinance as yf
+import requests
+import time
+import os
 
-
-# ------------------------- CONFIG -------------------------
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
 VOL_THRESHOLD = 1  # % ราคาผันผวนเกิน
+LAST_ALERT_FILE = "last_alert.txt"  # เก็บราคาครั้งล่าสุดที่ส่ง Volatility Alert
 
+# ---------------------- Retry function ----------------------
+def fetch_with_retry(func, timeout=120, wait=5):
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            value = func()
+            if value is not None:
+                return value
+        except:
+            pass
+        time.sleep(wait)
+    return None
 
-# ------------------------- FUNCTIONS -------------------------
-def send_telegram(message: str):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    r = requests.post(url, data=payload)
-    if not r.ok:
-        print("Telegram error:", r.text)
-
-
-def create_message(price, change_val_24h, pct_change_24h,
-                   day_high, day_low, high_3m, low_3m):
-
-    # ---- ดึงอัตรา USD → THB จาก Yahoo Finance ----
-    fx = yf.Ticker("THB=X").history(period="1d")
-    if not fx.empty:
-        thb_rate = fx["Close"].iloc[-1]
-        btc_thb = price * thb_rate
-    else:
-        btc_thb = None
-
-    # ---- ข้อความตามรูปแบบที่ต้องการ ----
-    msg = (
-        "🔔 *Bitcoin (BTC-USD)*\n"
-        "\n"
-        f"💵 ราคา:  *{price:,.2f}*\n"
-        f"เปลี่ยน 24 hr. {change_val_24h:+,.2f}  ({pct_change_24h:+.2f}%)\n"
-    )
-
-    if btc_thb:
-        msg += f"( {btc_thb:,.1f} บาท )\n"
-
-    msg += (
-        "\n"
-        f"📈 High (24h): {day_high:,.2f}\n"
-        f"📉 Low (24h): {day_low:,.2f}\n"
-        "\n"
-        f"📊 ช่วง 3 เดือน:\n"
-        f"{high_3m:,.2f} - {low_3m:,.2f}\n"
-    )
-
-    return msg
-
-
-def main():
+# ---------------------- BTC History ----------------------
+def get_btc_history():
     btc = yf.Ticker("BTC-USD")
-
-    # ข้อมูล 24 ชม.
     data = btc.history(period="1d", interval="1h")
     if data.empty:
-        print("No BTC data")
-        return
+        return None
+    return data
 
-    latest = data.iloc[-1]
-    prev = data.iloc[-2] if len(data) > 1 else latest
+# ---------------------- THB Rate ----------------------
+def get_thb_rate():
+    url = "https://api.exchangerate.host/latest?base=USD&symbols=THB"
+    r = requests.get(url, timeout=5)
+    return r.json()["rates"]["THB"]
 
-    price = latest['Close']
-    change_val_24h = latest['Close'] - prev['Close']
-    pct_change_24h = (change_val_24h / prev['Close']) * 100
-    day_high = latest['High']
-    day_low = latest['Low']
+# ---------------------- Telegram ----------------------
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
 
-    # ข้อมูล 3 เดือน
-    data_3m = btc.history(period="3mo")
-    high_3m = data_3m["High"].max()
-    low_3m = data_3m["Low"].min()
+# ---------------------- อ่าน/เขียน last alert ----------------------
+def read_last_alert():
+    if os.path.exists(LAST_ALERT_FILE):
+        with open(LAST_ALERT_FILE, "r") as f:
+            try:
+                return float(f.read().strip())
+            except:
+                return None
+    return None
 
-    # -------- ส่งข้อความหลัก --------
-    msg = create_message(
-        price, change_val_24h, pct_change_24h,
-        day_high, day_low, high_3m, low_3m
-    )
-    send_telegram(msg)
+def write_last_alert(price):
+    with open(LAST_ALERT_FILE, "w") as f:
+        f.write(str(price))
 
-    # -------- ส่งแจ้งเตือนความผันผวน --------
-    if abs(pct_change_24h) >= VOL_THRESHOLD:
-        vol_msg = (
+# ---------------------- MAIN ----------------------
+data = fetch_with_retry(get_btc_history)
+if data is None:
+    send_telegram("❌ *Bitcoin (BTC-USD) Alert*\n\nไม่สามารถดึงราคา BTC ได้หลัง retry 2 นาที")
+    raise SystemExit()
+
+latest = data.iloc[-1]
+prev   = data.iloc[-2] if len(data) > 1 else latest
+
+price = latest['Close']
+change_val_24h = latest['Close'] - prev['Close']
+pct_change_24h = (change_val_24h / prev['Close']) * 100
+day_high = latest['High']
+day_low  = latest['Low']
+
+# ข้อมูล 3 เดือน
+btc = yf.Ticker("BTC-USD")
+data_3m = btc.history(period="3mo")
+high_3m = data_3m["High"].max()
+low_3m = data_3m["Low"].min()
+
+# THB rate
+thb_rate = fetch_with_retry(get_thb_rate)
+if thb_rate is None:
+    btc_thb_text = "N/A (ดึงค่า THB rate ไม่สำเร็จ)"
+else:
+    btc_thb = price * thb_rate
+    btc_thb_text = f"{btc_thb:,.1f} บาท"
+
+# Emoji ขึ้นลง
+if change_val_24h > 0:
+    change_emoji = "🟢"
+elif change_val_24h < 0:
+    change_emoji = "🔴"
+else:
+    change_emoji = "⚪"
+
+# ---------------------- ข้อความหลัก ----------------------
+message = (
+f"🔔 *Bitcoin (BTC-USD)*\n\n"
+f"💵 ราคา:  *{price:,.2f}*\n\n"
+f"{change_emoji} เปลี่ยน 24 hr. {change_val_24h:+,.2f}  ({pct_change_24h:+.2f}%)\n"
+f"( {btc_thb_text} )\n\n"
+f"📈 High (24h): {day_high:,.2f}\n"
+f"📉 Low (24h): {day_low:,.2f}\n\n"
+f"📊 ช่วง 3 เดือน:\n"
+f"{high_3m:,.2f} - {low_3m:,.2f}"
+)
+send_telegram(message)
+
+# ---------------------- Volatility Alert ----------------------
+if abs(pct_change_24h) >= VOL_THRESHOLD:
+    last_alert = read_last_alert()
+    # ส่ง alert ถ้ายังไม่เคยส่งหรือเปลี่ยนแปลงใหม่
+    if last_alert is None or abs(price - last_alert)/last_alert*100 >= VOL_THRESHOLD:
+        vol_message = (
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
-            f"ราคาผันผวนเกิน {VOL_THRESHOLD}% ใน 24 ชั่วโมง\n"
-            f"ราคา: {price:,.2f} ({pct_change_24h:+.2f}%)\n\n"
+            f"{change_emoji} ราคาผันผวนเกิน {VOL_THRESHOLD}% ใน 24 ชั่วโมง\n"
+            f"ราคา: {price:,.2f} ({pct_change_24h:+.2f}%)\n"
+            f"( {btc_thb_text} )\n\n"
             f"📈 High (24h): {day_high:,.2f}\n"
             f"📉 Low (24h): {day_low:,.2f}\n"
-            f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
+            f"📊 ช่วง 3 เดือน:\n"
+            f"{high_3m:,.2f} - {low_3m:,.2f}"
         )
-        send_telegram(vol_msg)
-
-
-if __name__ == "__main__":
-    main()
+        send_telegram(vol_message)
+        write_last_alert(price)
