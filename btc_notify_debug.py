@@ -5,11 +5,13 @@ import os
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
-VOL_THRESHOLD = 1  # % ราคาผันผวนเกิน
-LAST_ALERT_FILE = "last_alert.txt"  # เก็บราคาครั้งล่าสุดที่ส่ง Volatility Alert
+VOL_THRESHOLD = 1      # % ราคาผันผวนเกิน
+RETRY_TIMEOUT = 180    # retry 3 นาที
+RETRY_WAIT = 5         # เว้น 5 วินาทีต่อครั้ง
+LAST_ALERT_FILE = "last_alert.txt"
 
 # ---------------------- Retry function ----------------------
-def fetch_with_retry(func, timeout=120, wait=5):
+def fetch_with_retry(func, timeout=RETRY_TIMEOUT, wait=RETRY_WAIT):
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -21,7 +23,7 @@ def fetch_with_retry(func, timeout=120, wait=5):
         time.sleep(wait)
     return None
 
-# ---------------------- BTC History ----------------------
+# ---------------------- BTC ----------------------
 def get_btc_history():
     btc = yf.Ticker("BTC-USD")
     data = btc.history(period="1d", interval="1h")
@@ -57,7 +59,7 @@ def write_last_alert(price):
 # ---------------------- MAIN ----------------------
 data = fetch_with_retry(get_btc_history)
 if data is None:
-    send_telegram("❌ *Bitcoin (BTC-USD) Alert*\n\nไม่สามารถดึงราคา BTC ได้หลัง retry 2 นาที")
+    send_telegram("❌ *Bitcoin (BTC-USD) Alert*\n\nไม่สามารถดึง BTC price ได้หลัง retry 3 นาที")
     raise SystemExit()
 
 latest = data.iloc[-1]
@@ -75,15 +77,15 @@ data_3m = btc.history(period="3mo")
 high_3m = data_3m["High"].max()
 low_3m = data_3m["Low"].min()
 
-# THB rate
+# ---------------------- THB ----------------------
 thb_rate = fetch_with_retry(get_thb_rate)
 if thb_rate is None:
-    btc_thb_text = "N/A (ดึงค่า THB rate ไม่สำเร็จ)"
-else:
-    btc_thb = price * thb_rate
-    btc_thb_text = f"{btc_thb:,.1f} บาท"
+    send_telegram("❌ *Bitcoin (BTC-USD) Alert*\n\nไม่สามารถดึง THB rate ได้หลัง retry 3 นาที")
+    raise SystemExit()
+btc_thb = price * thb_rate
+btc_thb_text = f"{btc_thb:,.1f} บาท"
 
-# Emoji ขึ้นลง
+# ---------------------- Emoji ขึ้น/ลง ----------------------
 if change_val_24h > 0:
     change_emoji = "🟢"
 elif change_val_24h < 0:
@@ -107,7 +109,6 @@ send_telegram(message)
 # ---------------------- Volatility Alert ----------------------
 if abs(pct_change_24h) >= VOL_THRESHOLD:
     last_alert = read_last_alert()
-    # ส่ง alert ถ้ายังไม่เคยส่งหรือเปลี่ยนแปลงใหม่
     if last_alert is None or abs(price - last_alert)/last_alert*100 >= VOL_THRESHOLD:
         vol_message = (
             f"⚡ *Volatility Alert — BTC-USD*\n\n"
