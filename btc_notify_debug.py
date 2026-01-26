@@ -3,7 +3,7 @@ import requests
 import time
 import os
 
-# --- ตั้งค่าตัวแปร ---
+# --- ตั้งค่าตัวแปร (Environment Variables) ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
 VOL_THRESHOLD = 1        
@@ -48,16 +48,6 @@ def get_metal_data(symbol):
         day_high = data["High"].iloc[-1]
         return price, change, pct, day_low, day_high
     return None
-
-def read_last_alert():
-    if os.path.exists(LAST_ALERT_FILE):
-        try:
-            with open(LAST_ALERT_FILE, "r") as f: return float(f.read().strip())
-        except: return None
-    return None
-
-def write_last_alert(price):
-    with open(LAST_ALERT_FILE, "w") as f: f.write(str(price))
 
 def send_telegram(msg: str):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -109,10 +99,15 @@ def main():
 
     if gold:
         g_price, g_chg, g_pct, g_low, g_high = gold
+        # สูตรคำนวณราคาทองแท่งไทย 96.5% เบื้องต้น
+        # (Gold Spot * 31.1035 / 15.244 * 0.965) * THB
+        thai_gold = ((g_price * 15.244 * 0.965) / 31.1035) * thb_rate
+        
         message += (
             f"👑 *GOLD*\n"
             f"*{g_price:,.2f}* {g_chg:+,.2f} ({g_pct:+.2f}%)\n"
-            f"Day's Range: {g_low:,.2f} - {g_high:,.2f}\n\n"
+            f"Day's Range: {g_low:,.2f} - {g_high:,.2f}\n"
+            f"🇹🇭 ทองแท่งไทย: *{thai_gold:,.0f}* บาท\n\n"
         )
 
     if silver:
@@ -124,13 +119,6 @@ def main():
         )
 
     send_telegram(message)
-
-    if abs(pct_24h) >= VOL_THRESHOLD:
-        last_p = read_last_alert()
-        if last_p is None or abs(price - last_p)/last_p*100 >= VOL_THRESHOLD:
-            vol_msg = f"⚡ *Volatility Alert — BTC-USD*\n\n" + message.replace("🔔", "⚡")
-            send_telegram(vol_msg)
-            write_last_alert(price)
 
 if __name__ == "__main__":
     main()
