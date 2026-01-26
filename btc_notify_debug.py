@@ -6,7 +6,7 @@ import os
 # --- ตั้งค่าตัวแปร ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID_BTC")
-VOL_THRESHOLD = 1        # % ความผันผวนสำหรับ Alert พิเศษ
+VOL_THRESHOLD = 1        
 RETRY_TIMEOUT = 180      
 RETRY_WAIT = 5           
 LAST_ALERT_FILE = "last_alert.txt"
@@ -41,7 +41,6 @@ def get_metal_data(symbol):
     data = ticker.history(period="1d")
     if not data.empty:
         price = data["Close"].iloc[-1]
-        # ดึงราคาปิดวันก่อนหน้าเพื่อคำนวณการเปลี่ยนแปลง
         prev_close = ticker.info.get('regularMarketPreviousClose', price)
         change = price - prev_close
         pct = (change / prev_close) * 100
@@ -80,10 +79,8 @@ def main():
     pct_24h = (change_24h / prev["Close"]) * 100
     
     # สถิติ 3 เดือน
-    btc_3m_ticker = yf.Ticker("BTC-USD")
-    data_3m = btc_3m_ticker.history(period="3mo")
-    high_3m = data_3m["High"].max()
-    low_3m = data_3m["Low"].min()
+    data_3m = yf.Ticker("BTC-USD").history(period="3mo")
+    high_3m, low_3m = data_3m["High"].max(), data_3m["Low"].min()
 
     # 2. ข้อมูลเงินบาท
     thb_rate, thb_pct = fetch_with_retry(get_thb_data)
@@ -114,7 +111,7 @@ def main():
         g_price, g_chg, g_pct, g_low, g_high = gold
         message += (
             f"👑 *GOLD*\n"
-            f"[{g_price:,.2f}]  {g_chg:+,.2f} ({g_pct:+.2f}%)\n"
+            f"*{g_price:,.2f}* {g_chg:+,.2f} ({g_pct:+.2f}%)\n"
             f"Day's Range: {g_low:,.2f} - {g_high:,.2f}\n\n"
         )
 
@@ -122,14 +119,12 @@ def main():
         s_price, s_chg, s_pct, s_low, s_high = silver
         message += (
             f"🥈 *Silver*\n"
-            f"[{s_price:,.2f}]  {s_chg:+,.2f} ({s_pct:+.2f}%)\n"
+            f"*{s_price:,.2f}* {s_chg:+,.2f} ({s_pct:+.2f}%)\n"
             f"Day's Range: {s_low:,.2f} - {s_high:,.2f}"
         )
 
-    # ส่งข้อความปกติ
     send_telegram(message)
 
-    # 5. Volatility Alert (ถ้าผันผวนแรง)
     if abs(pct_24h) >= VOL_THRESHOLD:
         last_p = read_last_alert()
         if last_p is None or abs(price - last_p)/last_p*100 >= VOL_THRESHOLD:
