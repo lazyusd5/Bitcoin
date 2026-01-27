@@ -24,7 +24,6 @@ def get_data(symbol):
     data = ticker.history(period="1d")
     if not data.empty:
         price = data["Close"].iloc[-1]
-        # ดึงราคาปิดวันก่อนหน้ามาคำนวณ % การเปลี่ยนแปลง
         prev_close = ticker.info.get('regularMarketPreviousClose', price)
         change = price - prev_close
         pct = (change / prev_close) * 100
@@ -105,20 +104,18 @@ def main():
             f"ต่ำสุด {thai_gold_low:,.0f} // สูงสุด {thai_gold_high:,.0f}\n\n"
         )
 
-    # 6. ข้อมูล Silver (สูตรคำนวณใหม่)
+    # 6. ข้อมูล Silver (เคาะเว้นวรรคเพิ่ม 2 ทีหลัง 1 Kg.)
     if silver:
         p, c, pct, l, h = silver
-        # สูตร: (ราคาโลก * เรทบาท * 32.1507) + 2.95%
         base_price = p * thb_rate * 32.1507
         silver_sell = base_price * (1 + 0.0295)
-        # ราคารับซื้อ: ราคาขาย - 1.3%
         silver_buy = silver_sell * (1 - 0.013)
 
         message += (
             f"🥈 *Silver*\n"
             f"*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\n"
             f"Day's Range: {l:,.2f} - {h:,.2f}\n"
-            f"ราคาขาย 1 Kg. *{silver_sell:,.0f}* บาท\n"
+            f"ราคาขาย 1 Kg.  *{silver_sell:,.0f}* บาท\n"
             f"ราคารับซื้อ 1 Kg. *{silver_buy:,.0f}* บาท\n\n"
         )
 
