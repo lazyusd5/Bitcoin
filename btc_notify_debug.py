@@ -24,6 +24,7 @@ def get_data(symbol):
     data = ticker.history(period="1d")
     if not data.empty:
         price = data["Close"].iloc[-1]
+        # ดึงราคาปิดวันก่อนหน้ามาคำนวณ % การเปลี่ยนแปลง
         prev_close = ticker.info.get('regularMarketPreviousClose', price)
         change = price - prev_close
         pct = (change / prev_close) * 100
@@ -70,7 +71,7 @@ def main():
     silver = get_data("SI=F")
     nasdaq = get_data("^NDX")
 
-    # 4. ประกอบข้อความ
+    # 4. ประกอบข้อความ Bitcoin
     btc_emoji = "🟢" if change_24h > 0 else "🔴"
     
     message = (
@@ -86,6 +87,7 @@ def main():
         f"=======================\n"
     )
 
+    # 5. ข้อมูล Gold
     if gold:
         p, c, pct, l, h = gold
         def to_thai_gold(world_price):
@@ -103,12 +105,14 @@ def main():
             f"ต่ำสุด {thai_gold_low:,.0f} // สูงสุด {thai_gold_high:,.0f}\n\n"
         )
 
+    # 6. ข้อมูล Silver (สูตรคำนวณใหม่)
     if silver:
         p, c, pct, l, h = silver
-        # คำนวณ Silver 1 Kg ไทย
-        # สูตร: ราคาโลก * ค่าเงินบาท * 32.1507
-        silver_sell = p * thb_rate * 32.1507
-        silver_buy = silver_sell * (1 - 0.013) # หักออก 1.3%
+        # สูตร: (ราคาโลก * เรทบาท * 32.1507) + 2.95%
+        base_price = p * thb_rate * 32.1507
+        silver_sell = base_price * (1 + 0.0295)
+        # ราคารับซื้อ: ราคาขาย - 1.3%
+        silver_buy = silver_sell * (1 - 0.013)
 
         message += (
             f"🥈 *Silver*\n"
@@ -118,6 +122,7 @@ def main():
             f"ราคารับซื้อ 1 Kg. *{silver_buy:,.0f}* บาท\n\n"
         )
 
+    # 7. ข้อมูล NASDAQ
     if nasdaq:
         p, c, pct, l, h = nasdaq
         message += (
