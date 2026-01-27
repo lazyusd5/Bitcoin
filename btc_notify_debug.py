@@ -50,7 +50,7 @@ def send_telegram(msg: str):
     except: pass
 
 def main():
-    # 1. ข้อมูล BTC & 3 เดือน
+    # 1. ข้อมูล BTC & ช่วง 3 เดือน
     btc_data = fetch_with_retry(get_btc_data)
     if btc_data is None: return
     latest = btc_data.iloc[-1]
@@ -61,7 +61,7 @@ def main():
     data_3m = yf.Ticker("BTC-USD").history(period="3mo")
     high_3m, low_3m = data_3m["High"].max(), data_3m["Low"].min()
 
-    # 2. ข้อมูลเงินบาท
+    # 2. ข้อมูลเงินบาท (ปรับให้ตัวเลขเป็นตัวหนา)
     thb_rate, thb_pct = fetch_with_retry(get_thb_data)
     thb_emoji = "🔺" if thb_pct > 0 else "🔻" if thb_pct < 0 else "🔸"
     
@@ -78,7 +78,7 @@ def main():
         f"💵 ราคา:  *{price:,.2f}*\n\n"
         f"{btc_emoji} เปลี่ยน 24 hr. {change_24h:+,.2f}  ({pct_24h:+.2f}%)\n"
         f"( {price*thb_rate:,.1f} บาท )\n"
-        f"{thb_emoji}{thb_rate:.2f} THB ({thb_pct:+.2f}%)\n\n"
+        f"{thb_emoji}*{thb_rate:.2f}* THB ({thb_pct:+.2f}%)\n\n"
         f"📈 High (24h): {latest['High']:,.2f}\n"
         f"📉 Low (24h): {latest['Low']:,.2f}\n\n"
         f"📊 ช่วง 3 เดือน:\n"
@@ -88,8 +88,21 @@ def main():
 
     if gold:
         p, c, pct, l, h = gold
-        thai_gold = ((p * 15.244 * 0.965) / 31.1035) * thb_rate
-        message += f"👑 *GOLD*\n*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\nDay's Range: {l:,.2f} - {h:,.2f}\n🇹🇭 ทองแท่งไทย: *{thai_gold:,.0f}* บาท\n\n"
+        # ฟังก์ชันคำนวณทองไทย
+        def to_thai_gold(world_price):
+            return ((world_price * 15.244 * 0.965) / 31.1035) * thb_rate
+            
+        thai_gold_now = to_thai_gold(p)
+        thai_gold_low = to_thai_gold(l)
+        thai_gold_high = to_thai_gold(h)
+
+        message += (
+            f"👑 *GOLD*\n"
+            f"*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\n"
+            f"Day's Range: {l:,.2f} - {h:,.2f}\n"
+            f"🇹🇭 ทองแท่งไทย: *{thai_gold_now:,.0f}* บาท\n"
+            f"ต่ำสุด {thai_gold_low:,.0f} // สูงสุด {thai_gold_high:,.0f}\n\n"
+        )
 
     if silver:
         p, c, pct, l, h = silver
@@ -98,8 +111,8 @@ def main():
     if nasdaq:
         p, c, pct, l, h = nasdaq
         message += (
-            f"🇺🇸 *NASDAQ-100*\n" # เว้นบรรทัดตามสั่ง
-            f"*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\n" # ราคาตัวหนาและเว้นวรรค
+            f"🇺🇸 *NASDAQ-100*\n"
+            f"*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\n"
             f"Day's Range: {l:,.2f} - {h:,.2f}"
         )
 
