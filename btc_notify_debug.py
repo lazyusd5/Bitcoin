@@ -61,7 +61,7 @@ def main():
     data_3m = yf.Ticker("BTC-USD").history(period="3mo")
     high_3m, low_3m = data_3m["High"].max(), data_3m["Low"].min()
 
-    # 2. ข้อมูลเงินบาท (ปรับให้ตัวเลขเป็นตัวหนา)
+    # 2. ข้อมูลเงินบาท
     thb_rate, thb_pct = fetch_with_retry(get_thb_data)
     thb_emoji = "🔺" if thb_pct > 0 else "🔻" if thb_pct < 0 else "🔸"
     
@@ -88,7 +88,6 @@ def main():
 
     if gold:
         p, c, pct, l, h = gold
-        # ฟังก์ชันคำนวณทองไทย
         def to_thai_gold(world_price):
             return ((world_price * 15.244 * 0.965) / 31.1035) * thb_rate
             
@@ -106,7 +105,18 @@ def main():
 
     if silver:
         p, c, pct, l, h = silver
-        message += f"🥈 *Silver*\n*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\nDay's Range: {l:,.2f} - {h:,.2f}\n\n"
+        # คำนวณ Silver 1 Kg ไทย
+        # สูตร: ราคาโลก * ค่าเงินบาท * 32.1507
+        silver_sell = p * thb_rate * 32.1507
+        silver_buy = silver_sell * (1 - 0.013) # หักออก 1.3%
+
+        message += (
+            f"🥈 *Silver*\n"
+            f"*{p:,.2f}* {c:+,.2f} ({pct:+.2f}%)\n"
+            f"Day's Range: {l:,.2f} - {h:,.2f}\n"
+            f"ราคาขาย 1 Kg. *{silver_sell:,.0f}* บาท\n"
+            f"ราคารับซื้อ 1 Kg. *{silver_buy:,.0f}* บาท\n\n"
+        )
 
     if nasdaq:
         p, c, pct, l, h = nasdaq
